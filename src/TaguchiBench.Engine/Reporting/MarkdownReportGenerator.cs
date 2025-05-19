@@ -106,6 +106,24 @@ namespace TaguchiBench.Engine.Reporting {
                 _config.Interactions.OrderBy(i => i.FirstParameterName).ThenBy(i => i.SecondParameterName)
                     .ToList().ForEach(i => sb.AppendLine($"*   {i.FirstParameterName} × {i.SecondParameterName}"));
             }
+
+            // Add fixed command line arguments
+            var commandLine = _config.GetFixedCommandLineForDisplay();
+            if (!string.IsNullOrWhiteSpace(commandLine)) {
+                sb.AppendLine($"\n### Fixed Command Line:");
+                sb.AppendLine("```");
+                sb.AppendLine(commandLine);
+                sb.AppendLine("```");
+            }
+
+            // Add fixed environment variables
+            var envVars = _config.GetFixedEnvironmentVariablesForDisplay();
+            if (!string.IsNullOrWhiteSpace(envVars)) {
+                sb.AppendLine($"\n### Fixed Environment Variables:");
+                sb.AppendLine("```");
+                sb.AppendLine(envVars);
+                sb.AppendLine("```");
+            }
         }
 
         private void AppendAnalysisWarningsMd(StringBuilder sb, List<string> warnings, string context) {

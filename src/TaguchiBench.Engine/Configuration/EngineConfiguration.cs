@@ -333,6 +333,15 @@ namespace TaguchiBench.Engine.Configuration {
                 }))
             };
         }
+
+        public string GetFixedCommandLineForDisplay() {
+            return Path.GetFileName(TargetExecutablePath) + Environment.NewLine +
+             string.Join(Environment.NewLine, FixedCommandLineArguments.Select(kvp => $"{kvp.Key}{(kvp.Value is null ? "" : $" {kvp.Value}")}"));
+        }
+
+        public string GetFixedEnvironmentVariablesForDisplay() {
+            return string.Join(Environment.NewLine, FixedEnvironmentVariables.Select(kvp => $"{kvp.Key}={kvp.Value}"));
+        }
     }
 
     /// <summary>

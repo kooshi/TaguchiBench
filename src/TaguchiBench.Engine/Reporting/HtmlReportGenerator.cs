@@ -338,13 +338,12 @@ namespace TaguchiBench.Engine.Reporting {
   <h1>TaguchiBench Engine Analysis Report</h1>
 ");
         }
-
         private void BuildOverallSummary(StringBuilder sb) {
             string arrayUsed = _analysisResultsList.FirstOrDefault()?.ArrayDesignationUsed ?? (_config.ControlFactors.Any() ? "N/A (Design not run or available in results)" : "N/A (No control factors)");
             int runsInDesign = _analysisResultsList.FirstOrDefault()?.NumberOfRunsInExperiment ?? 0;
             string dateTime = DateTime.Now.ToString("yyyy-MM-dd HH:mm:ss");
 
-      sb.Append(@$"
+            sb.Append(@$"
   <div class='section' id='overall-summary'>
     <h2>Overall Experiment Setup</h2>
     <div style='display: grid; grid-template-columns: repeat(auto-fit, minmax(350px, 1fr)); gap: 20px;'>
@@ -397,13 +396,33 @@ namespace TaguchiBench.Engine.Reporting {
                 sb.Append(@"
     </ul>");
             }
+
+            // Add fixed command line arguments and environment variables
+            var commandLine = _config.GetFixedCommandLineForDisplay();
+            var envVars = _config.GetFixedEnvironmentVariablesForDisplay();
+
+            if (!string.IsNullOrWhiteSpace(commandLine)) {
+                sb.Append(@"
+    <h4>Fixed Command Line:</h4>
+    <pre style='background-color: #f5f5f5; padding: 12px; border: 1px solid var(--border-color); border-radius: 4px; overflow-x: auto; font-size: 0.85em;'>");
+                sb.Append(HttpUtility.HtmlEncode(commandLine));
+                sb.Append(@"</pre>");
+            }
+
+            if (!string.IsNullOrWhiteSpace(envVars)) {
+                sb.Append(@"
+    <h4>Fixed Environment Variables:</h4>
+    <pre style='background-color: #f5f5f5; padding: 12px; border: 1px solid var(--border-color); border-radius: 4px; overflow-x: auto; font-size: 0.85em;'>");
+                sb.Append(HttpUtility.HtmlEncode(envVars));
+                sb.Append(@"</pre>");
+            }
+
             sb.Append(@"
   </div>");
         }
-
-    private void BuildMetricSection(StringBuilder sb, FullAnalysisReportData analysisData, string sectionTitle) {
-      string sectionId = sectionTitle.ToLowerInvariant().Replace(" ", "-").Replace("'", "").Replace(":", "").Replace("(", "").Replace(")", "").Replace(".", "");
-      sb.Append(@$"
+        private void BuildMetricSection(StringBuilder sb, FullAnalysisReportData analysisData, string sectionTitle) {
+            string sectionId = sectionTitle.ToLowerInvariant().Replace(" ", "-").Replace("'", "").Replace(":", "").Replace("(", "").Replace(")", "").Replace(".", "");
+            sb.Append(@$"
   <div class='section metric-section' id='{sectionId}'>
     <h2>{HttpUtility.HtmlEncode(sectionTitle)}</h2>
     <p class='summary-item'><strong>S/N Ratio Type Used:</strong> {analysisData.SnTypeUsed}</p>");
@@ -499,11 +518,11 @@ namespace TaguchiBench.Engine.Reporting {
             }
         }
 
-    private void BuildSingleAnovaTable(StringBuilder sb, AnovaAnalysisResult anovaResult, string title) {
-      if (anovaResult == null || anovaResult.AnovaTable == null || !anovaResult.AnovaTable.Any()) {
-        sb.Append(@$"<h4>{HttpUtility.HtmlEncode(title)}</h4><p>No ANOVA data available or calculated.</p>");
-        return;
-      }
+        private void BuildSingleAnovaTable(StringBuilder sb, AnovaAnalysisResult anovaResult, string title) {
+            if (anovaResult == null || anovaResult.AnovaTable == null || !anovaResult.AnovaTable.Any()) {
+                sb.Append(@$"<h4>{HttpUtility.HtmlEncode(title)}</h4><p>No ANOVA data available or calculated.</p>");
+                return;
+            }
             sb.Append(@$"
     <h4>{HttpUtility.HtmlEncode(title)}</h4>
     <div style='overflow-x: auto;'>
@@ -538,24 +557,24 @@ namespace TaguchiBench.Engine.Reporting {
         }
 
         private void BuildAnovaContributionChart(StringBuilder sb, AnovaAnalysisResult anovaResult, string title, string canvasIdSuffix) {
-      if (anovaResult == null || anovaResult.AnovaTable == null || !anovaResult.AnovaTable.Any()) {
-        return;
-      }
+            if (anovaResult == null || anovaResult.AnovaTable == null || !anovaResult.AnovaTable.Any()) {
+                return;
+            }
 
-      var chartData = anovaResult.AnovaTable
-          .Where(r => r.ContributionPercentage > 0.01 && !r.Source.Contains(AnovaResult.ErrorSource))
-          .OrderByDescending(r => r.ContributionPercentage)
-          .ToList();
+            var chartData = anovaResult.AnovaTable
+                .Where(r => r.ContributionPercentage > 0.01 && !r.Source.Contains(AnovaResult.ErrorSource))
+                .OrderByDescending(r => r.ContributionPercentage)
+                .ToList();
 
-      if (!chartData.Any()) {
-        return;
-      }
+            if (!chartData.Any()) {
+                return;
+            }
 
-      var labels = chartData.Select(r => $"'{HttpUtility.JavaScriptStringEncode(r.Source)}'").ToList();
-      var dataValues = chartData.Select(r => r.ContributionPercentage.ToString("F2", CultureInfo.InvariantCulture)).ToList();
-      string canvasId = $"anovaContribChart_{canvasIdSuffix}";
+            var labels = chartData.Select(r => $"'{HttpUtility.JavaScriptStringEncode(r.Source)}'").ToList();
+            var dataValues = chartData.Select(r => r.ContributionPercentage.ToString("F2", CultureInfo.InvariantCulture)).ToList();
+            string canvasId = $"anovaContribChart_{canvasIdSuffix}";
 
-      sb.Append(@$"
+            sb.Append(@$"
       <div class='plot-container'>
         <h4>{HttpUtility.HtmlEncode(title)}</h4>
         <div class='chart-wrapper' style='height: {Math.Max(150, chartData.Count * 30 + 50)}px;'>
@@ -608,24 +627,24 @@ namespace TaguchiBench.Engine.Reporting {
       </div>");
         }
 
-    private void BuildMainEffectsPlots(StringBuilder sb, FullAnalysisReportData analysisData) {
-      if (analysisData.MainEffects == null || !analysisData.MainEffects.Any()) {
-        sb.Append("<div class='plot-container'><h4>Main Effects Plots</h4><p>No main effects data available.</p></div>");
-        return;
-      }
+        private void BuildMainEffectsPlots(StringBuilder sb, FullAnalysisReportData analysisData) {
+            if (analysisData.MainEffects == null || !analysisData.MainEffects.Any()) {
+                sb.Append("<div class='plot-container'><h4>Main Effects Plots</h4><p>No main effects data available.</p></div>");
+                return;
+            }
 
-      string metricId = analysisData.MetricAnalyzed.ToLowerInvariant().Replace(" ", "").Replace(".", "");
+            string metricId = analysisData.MetricAnalyzed.ToLowerInvariant().Replace(" ", "").Replace(".", "");
 
-      foreach (var paramName in analysisData.MainEffects.Keys.OrderBy(k => k)) {
-        var effectData = analysisData.MainEffects[paramName];
-        var orderedLevelsSn = effectData.EffectsByLevelSn.OrderBy(kvp => kvp.Key.OALevel.Level).ToList();
-        var orderedLevelsRaw = effectData.EffectsByLevelRaw.OrderBy(kvp => kvp.Key.OALevel.Level).ToList();
-        var labels = orderedLevelsSn.Select(kvp => $"'{HttpUtility.JavaScriptStringEncode(kvp.Key.Value)}'").ToList();
+            foreach (var paramName in analysisData.MainEffects.Keys.OrderBy(k => k)) {
+                var effectData = analysisData.MainEffects[paramName];
+                var orderedLevelsSn = effectData.EffectsByLevelSn.OrderBy(kvp => kvp.Key.OALevel.Level).ToList();
+                var orderedLevelsRaw = effectData.EffectsByLevelRaw.OrderBy(kvp => kvp.Key.OALevel.Level).ToList();
+                var labels = orderedLevelsSn.Select(kvp => $"'{HttpUtility.JavaScriptStringEncode(kvp.Key.Value)}'").ToList();
                 var dataValuesSn = orderedLevelsSn.Select(kvp => kvp.Value.ToString("F4", CultureInfo.InvariantCulture)).ToList();
                 var dataValuesRaw = orderedLevelsRaw.Select(kvp => kvp.Value.ToString("F4", CultureInfo.InvariantCulture)).ToList();
                 string canvasId = $"mainEffectChart_{metricId}_{HttpUtility.UrlEncode(paramName).Replace('%', '_')}";
 
-        sb.Append(@$"
+                sb.Append(@$"
       <div class='plot-container'>
         <h4>Main Effect: {HttpUtility.HtmlEncode(paramName)}</h4>
         <div class='chart-wrapper'><canvas id='{canvasId}'></canvas></div>
@@ -719,14 +738,14 @@ namespace TaguchiBench.Engine.Reporting {
             }
         }
 
-    private void BuildInteractionPlots(StringBuilder sb, FullAnalysisReportData analysisData) {
-      if (analysisData.InteractionEffectsSn == null || !analysisData.InteractionEffectsSn.Any()) {
-        sb.Append("<div class='plot-container'><h4>Interaction Plots</h4><p>No interaction effects data available.</p></div>");
-        return;
-      }
+        private void BuildInteractionPlots(StringBuilder sb, FullAnalysisReportData analysisData) {
+            if (analysisData.InteractionEffectsSn == null || !analysisData.InteractionEffectsSn.Any()) {
+                sb.Append("<div class='plot-container'><h4>Interaction Plots</h4><p>No interaction effects data available.</p></div>");
+                return;
+            }
 
-      string metricId = analysisData.MetricAnalyzed.ToLowerInvariant().Replace(" ", "").Replace(".", "");
-      var plotColors = new[] {
+            string metricId = analysisData.MetricAnalyzed.ToLowerInvariant().Replace(" ", "").Replace(".", "");
+            var plotColors = new[] {
                 "rgba(44, 111, 187, 0.8)",
                 "rgba(220, 53, 69, 0.8)",
                 "rgba(40, 167, 69, 0.8)",
@@ -735,29 +754,29 @@ namespace TaguchiBench.Engine.Reporting {
                 "rgba(23, 162, 184, 0.8)"
             };
 
-      foreach (var intKey in analysisData.InteractionEffectsSn.Keys.OrderBy(k => k)) {
-        var interactionEffect = analysisData.InteractionEffectsSn[intKey];
-        string[] factorNames = intKey.Split('*');
+            foreach (var intKey in analysisData.InteractionEffectsSn.Keys.OrderBy(k => k)) {
+                var interactionEffect = analysisData.InteractionEffectsSn[intKey];
+                string[] factorNames = intKey.Split('*');
 
-        if (factorNames.Length != 2) {
-          continue;
-        }
+                if (factorNames.Length != 2) {
+                    continue;
+                }
 
-        string factor1Name = factorNames[0];
-        string factor2Name = factorNames[1];
-        var factor1Def = _config.ControlFactors.FirstOrDefault(p => p.Name == factor1Name);
-        var factor2Def = _config.ControlFactors.FirstOrDefault(p => p.Name == factor2Name);
+                string factor1Name = factorNames[0];
+                string factor2Name = factorNames[1];
+                var factor1Def = _config.ControlFactors.FirstOrDefault(p => p.Name == factor1Name);
+                var factor2Def = _config.ControlFactors.FirstOrDefault(p => p.Name == factor2Name);
 
-        if (factor1Def == null || factor2Def == null) {
-          continue;
-        }
+                if (factor1Def == null || factor2Def == null) {
+                    continue;
+                }
 
-        var factor1LevelsOrdered = factor1Def.Levels.Values.OrderBy(l => l.OALevel.Level).ToList();
-        var factor2LevelsOrdered = factor2Def.Levels.Values.OrderBy(l => l.OALevel.Level).ToList();
-        string canvasId = $"interactionChart_{metricId}_{HttpUtility.UrlEncode(intKey).Replace('%', '_')}";
-        string collapsibleId = $"interactionHeatmap_{metricId}_{HttpUtility.UrlEncode(intKey).Replace('%', '_')}";
+                var factor1LevelsOrdered = factor1Def.Levels.Values.OrderBy(l => l.OALevel.Level).ToList();
+                var factor2LevelsOrdered = factor2Def.Levels.Values.OrderBy(l => l.OALevel.Level).ToList();
+                string canvasId = $"interactionChart_{metricId}_{HttpUtility.UrlEncode(intKey).Replace('%', '_')}";
+                string collapsibleId = $"interactionHeatmap_{metricId}_{HttpUtility.UrlEncode(intKey).Replace('%', '_')}";
 
-        sb.Append(@$"
+                sb.Append(@$"
       <div class='plot-container'>
         <h4>Interaction: {HttpUtility.HtmlEncode(factor1Name)} × {HttpUtility.HtmlEncode(factor2Name)} (S/N Ratio)</h4>
         <div class='chart-wrapper'><canvas id='{canvasId}'></canvas></div>
@@ -770,13 +789,13 @@ namespace TaguchiBench.Engine.Reporting {
               labels: [{string.Join(",", factor1LevelsOrdered.Select(l => $"'{HttpUtility.JavaScriptStringEncode(l.Value)}'"))}], 
               datasets: [");
 
-        int colorIdx = 0;
-        foreach (var levelF2 in factor2LevelsOrdered) {
-          var dataValuesForLine = factor1LevelsOrdered.Select(levelF1 =>
-              interactionEffect.EffectsByLevelPair.TryGetValue((levelF1, levelF2), out double snVal) && !double.IsNaN(snVal)
-              ? snVal.ToString("F4", CultureInfo.InvariantCulture) : "null").ToList();
+                int colorIdx = 0;
+                foreach (var levelF2 in factor2LevelsOrdered) {
+                    var dataValuesForLine = factor1LevelsOrdered.Select(levelF1 =>
+                        interactionEffect.EffectsByLevelPair.TryGetValue((levelF1, levelF2), out double snVal) && !double.IsNaN(snVal)
+                        ? snVal.ToString("F4", CultureInfo.InvariantCulture) : "null").ToList();
 
-          sb.Append(@$"{{ 
+                    sb.Append(@$"{{ 
                 label: '{HttpUtility.JavaScriptStringEncode(factor2Name)} = {HttpUtility.JavaScriptStringEncode(levelF2.Value)}', 
                 data: [{string.Join(",", dataValuesForLine)}], 
                 borderColor: '{plotColors[colorIdx % plotColors.Length]}', 
@@ -787,10 +806,10 @@ namespace TaguchiBench.Engine.Reporting {
                 fill: false 
               }}{(colorIdx < factor2LevelsOrdered.Count - 1 ? "," : "")}");
 
-          colorIdx++;
-        }
+                    colorIdx++;
+                }
 
-        sb.Append(@$"
+                sb.Append(@$"
               ]
             }}, 
             options: {{ 
@@ -836,15 +855,15 @@ namespace TaguchiBench.Engine.Reporting {
         }})();
         </script>");
 
-        BuildInteractionHeatmapTable(sb, interactionEffect, factor1LevelsOrdered, factor2LevelsOrdered, factor1Name, factor2Name, collapsibleId);
+                BuildInteractionHeatmapTable(sb, interactionEffect, factor1LevelsOrdered, factor2LevelsOrdered, factor1Name, factor2Name, collapsibleId);
 
-        sb.Append(@"
+                sb.Append(@"
       </div>");
-      }
-    }
+            }
+        }
 
-    private void BuildInteractionHeatmapTable(StringBuilder sb, ParameterInteractionEffect effectData, List<Level> factor1Levels, List<Level> factor2Levels, string factor1Name, string factor2Name, string collapsibleId) {
-      sb.Append(@$"
+        private void BuildInteractionHeatmapTable(StringBuilder sb, ParameterInteractionEffect effectData, List<Level> factor1Levels, List<Level> factor2Levels, string factor1Name, string factor2Name, string collapsibleId) {
+            sb.Append(@$"
         <button type='button' class='collapsible-btn' data-target='{collapsibleId}'>
           Show/Hide Interaction Heatmap: {HttpUtility.HtmlEncode(factor1Name)} × {HttpUtility.HtmlEncode(factor2Name)}
         </button>
@@ -855,71 +874,71 @@ namespace TaguchiBench.Engine.Reporting {
               <tr>
                 <th>{HttpUtility.HtmlEncode(factor1Name)} \ {HttpUtility.HtmlEncode(factor2Name)}</th>");
 
-      foreach (var levelF2 in factor2Levels) {
-        sb.Append(@$"<th>{HttpUtility.HtmlEncode(levelF2.Value)}</th>");
-      }
+            foreach (var levelF2 in factor2Levels) {
+                sb.Append(@$"<th>{HttpUtility.HtmlEncode(levelF2.Value)}</th>");
+            }
 
-      sb.Append(@"
+            sb.Append(@"
               </tr>
             </thead>
             <tbody>");
 
-      var allSnValues = effectData.EffectsByLevelPair.Values.Where(v => !double.IsNaN(v)).ToList();
-      double minSn = allSnValues.Any() ? allSnValues.Min() : 0;
-      double maxSn = allSnValues.Any() ? allSnValues.Max() : 0;
-      double rangeSn = (maxSn - minSn) > 1e-6 ? (maxSn - minSn) : 1.0;
+            var allSnValues = effectData.EffectsByLevelPair.Values.Where(v => !double.IsNaN(v)).ToList();
+            double minSn = allSnValues.Any() ? allSnValues.Min() : 0;
+            double maxSn = allSnValues.Any() ? allSnValues.Max() : 0;
+            double rangeSn = (maxSn - minSn) > 1e-6 ? (maxSn - minSn) : 1.0;
 
-      foreach (var levelF1 in factor1Levels) {
-        sb.Append(@$"
+            foreach (var levelF1 in factor1Levels) {
+                sb.Append(@$"
               <tr>
                 <td><strong>{HttpUtility.HtmlEncode(levelF1.Value)}</strong></td>");
 
-        foreach (var levelF2 in factor2Levels) {
-          effectData.EffectsByLevelPair.TryGetValue((levelF1, levelF2), out double snVal);
-          string cellStyle = "";
+                foreach (var levelF2 in factor2Levels) {
+                    effectData.EffectsByLevelPair.TryGetValue((levelF1, levelF2), out double snVal);
+                    string cellStyle = "";
 
-          if (!double.IsNaN(snVal)) {
-            double normalized = rangeSn == 0 ? 0.5 : (snVal - minSn) / rangeSn; // Avoid div by zero if all values same
-            int lightness = (int)(90 - (normalized * 40));
-            cellStyle = $"style='background-color: hsl(120, 60%, {lightness}%); color: {(lightness < 70 ? "white" : "black")};'";
-          }
+                    if (!double.IsNaN(snVal)) {
+                        double normalized = rangeSn == 0 ? 0.5 : (snVal - minSn) / rangeSn; // Avoid div by zero if all values same
+                        int lightness = (int)(90 - (normalized * 40));
+                        cellStyle = $"style='background-color: hsl(120, 60%, {lightness}%); color: {(lightness < 70 ? "white" : "black")};'";
+                    }
 
-          sb.Append(@$"
+                    sb.Append(@$"
                 <td {cellStyle}>{(double.IsNaN(snVal) ? "N/A" : snVal.ToString("F2"))}</td>");
-        }
+                }
 
-        sb.Append(@"
+                sb.Append(@"
               </tr>");
-      }
+            }
 
-      sb.Append(@"
+            sb.Append(@"
             </tbody>
           </table>
         </div>");
-    }
+        }
 
-    private void BuildNormalPlotsSection(StringBuilder sb, FullAnalysisReportData analysisData) {
-      if (analysisData.EffectEstimates == null || !analysisData.EffectEstimates.Any()) {
-        sb.Append("<div class='plot-container'><h4>Normal Probability Plot of Effects</h4><p>No effect estimates available (typically for 2-level factors/interactions only).</p></div>");
-        return;
-      }
+        private void BuildNormalPlotsSection(StringBuilder sb, FullAnalysisReportData analysisData) {
+            if (analysisData.EffectEstimates == null || !analysisData.EffectEstimates.Any()) {
+                sb.Append("<div class='plot-container'><h4>Normal Probability Plot of Effects</h4><p>No effect estimates available (typically for 2-level factors/interactions only).</p></div>");
+                return;
+            }
 
-      string metricId = analysisData.MetricAnalyzed.ToLowerInvariant().Replace(" ", "").Replace(".", "");
-      var sortedEffects = analysisData.EffectEstimates.OrderBy(e => e.Effect).ToList();
-      var dataPoints = new List<string>();
-      int N = sortedEffects.Count;
+            string metricId = analysisData.MetricAnalyzed.ToLowerInvariant().Replace(" ", "").Replace(".", "");
+            var sortedEffects = analysisData.EffectEstimates.OrderBy(e => e.Effect).ToList();
+            var dataPoints = new List<string>();
+            int N = sortedEffects.Count;
 
-      if (N > 0) {
-        for (int i = 0; i < N; i++) {
-          double p_i = (i + 0.5) / N; // Using (i+0.5)/N for plotting position
-          double z_i = MathNet.Numerics.Distributions.Normal.InvCDF(0, 1, p_i);
-          dataPoints.Add($"{{ x: {z_i.ToString("F4", CultureInfo.InvariantCulture)}, y: {sortedEffects[i].Effect.ToString("F4", CultureInfo.InvariantCulture)}, label: '{HttpUtility.JavaScriptStringEncode(sortedEffects[i].Source)}' }}");
+            if (N > 0) {
+                for (int i = 0; i < N; i++) {
+                    double p_i = (i + 0.5) / N; // Using (i+0.5)/N for plotting position
+                    double z_i = MathNet.Numerics.Distributions.Normal.InvCDF(0, 1, p_i);
+                    dataPoints.Add($"{{ x: {z_i.ToString("F4", CultureInfo.InvariantCulture)}, y: {sortedEffects[i].Effect.ToString("F4", CultureInfo.InvariantCulture)}, label: '{HttpUtility.JavaScriptStringEncode(sortedEffects[i].Source)}' }}");
                 }
             }
 
-      string canvasId = $"normalPlotEffects_{metricId}";
+            string canvasId = $"normalPlotEffects_{metricId}";
 
-      sb.Append(@$"
+            sb.Append(@$"
       <div class='plot-container'>
         <h4>Normal Probability Plot of Effects (S/N Scale)</h4>
         <div class='chart-wrapper'><canvas id='{canvasId}'></canvas></div>
@@ -980,12 +999,12 @@ namespace TaguchiBench.Engine.Reporting {
       </div>");
         }
 
-    private void BuildRawDataCollapsibleSections(StringBuilder sb, FullAnalysisReportData analysisData) {
-      // Table for Main Effects (S/N and Raw)
-      if (analysisData.MainEffects != null && analysisData.MainEffects.Any()) {
-        string mainEffectsId = $"mainEffects_{analysisData.MetricAnalyzed.ToLowerInvariant().Replace(" ", "_")}";
+        private void BuildRawDataCollapsibleSections(StringBuilder sb, FullAnalysisReportData analysisData) {
+            // Table for Main Effects (S/N and Raw)
+            if (analysisData.MainEffects != null && analysisData.MainEffects.Any()) {
+                string mainEffectsId = $"mainEffects_{analysisData.MetricAnalyzed.ToLowerInvariant().Replace(" ", "_")}";
 
-        sb.Append(@$"
+                sb.Append(@$"
     <button type='button' class='collapsible-btn' data-target='{mainEffectsId}'>
       Show/Hide Main Effects Data Table ({HttpUtility.HtmlEncode(analysisData.MetricAnalyzed)})
     </button>
@@ -1001,13 +1020,13 @@ namespace TaguchiBench.Engine.Reporting {
         </thead>
         <tbody>");
 
-        foreach (var paramEntry in analysisData.MainEffects.OrderBy(p => p.Key)) {
-          bool first = true;
+                foreach (var paramEntry in analysisData.MainEffects.OrderBy(p => p.Key)) {
+                    bool first = true;
 
-          foreach (var levelSnEntry in paramEntry.Value.EffectsByLevelSn.OrderBy(l => l.Key.OALevel.Level)) {
-            paramEntry.Value.EffectsByLevelRaw.TryGetValue(levelSnEntry.Key, out double rawVal);
+                    foreach (var levelSnEntry in paramEntry.Value.EffectsByLevelSn.OrderBy(l => l.Key.OALevel.Level)) {
+                        paramEntry.Value.EffectsByLevelRaw.TryGetValue(levelSnEntry.Key, out double rawVal);
 
-            sb.Append(@$"
+                        sb.Append(@$"
           <tr>
             <td>{(first ? HttpUtility.HtmlEncode(paramEntry.Key) : "")}</td>
             <td>{HttpUtility.HtmlEncode(levelSnEntry.Key.Value)}</td>
@@ -1015,21 +1034,21 @@ namespace TaguchiBench.Engine.Reporting {
             <td>{(double.IsNaN(rawVal) ? "N/A" : rawVal.ToString("F4"))}</td>
           </tr>");
 
-            first = false;
-          }
-        }
+                        first = false;
+                    }
+                }
 
-        sb.Append(@"
+                sb.Append(@"
         </tbody>
       </table>
     </div>");
-      }
+            }
 
-      // Table for Interaction Effects (S/N only)
-      if (analysisData.InteractionEffectsSn != null && analysisData.InteractionEffectsSn.Any()) {
-        string interactionEffectsId = $"interactionEffects_{analysisData.MetricAnalyzed.ToLowerInvariant().Replace(" ", "_")}";
+            // Table for Interaction Effects (S/N only)
+            if (analysisData.InteractionEffectsSn != null && analysisData.InteractionEffectsSn.Any()) {
+                string interactionEffectsId = $"interactionEffects_{analysisData.MetricAnalyzed.ToLowerInvariant().Replace(" ", "_")}";
 
-        sb.Append(@$"
+                sb.Append(@$"
     <button type='button' class='collapsible-btn' data-target='{interactionEffectsId}'>
       Show/Hide Interaction Effects Data Table (S/N - {HttpUtility.HtmlEncode(analysisData.MetricAnalyzed)})
     </button>
@@ -1045,14 +1064,14 @@ namespace TaguchiBench.Engine.Reporting {
         </thead>
         <tbody>");
 
-        foreach (var intEntry in analysisData.InteractionEffectsSn.OrderBy(i => i.Key)) {
-          bool first = true;
+                foreach (var intEntry in analysisData.InteractionEffectsSn.OrderBy(i => i.Key)) {
+                    bool first = true;
 
-          foreach (var levelPairEntry in intEntry.Value.EffectsByLevelPair
-              .OrderBy(l => l.Key.Item1.OALevel.Level)
-              .ThenBy(l => l.Key.Item2.OALevel.Level)) {
+                    foreach (var levelPairEntry in intEntry.Value.EffectsByLevelPair
+                        .OrderBy(l => l.Key.Item1.OALevel.Level)
+                        .ThenBy(l => l.Key.Item2.OALevel.Level)) {
 
-            sb.Append(@$"
+                        sb.Append(@$"
           <tr>
             <td>{(first ? HttpUtility.HtmlEncode(intEntry.Key) : "")}</td>
             <td>{HttpUtility.HtmlEncode(levelPairEntry.Key.Item1.Value)}</td>
@@ -1060,22 +1079,22 @@ namespace TaguchiBench.Engine.Reporting {
             <td>{levelPairEntry.Value:F4}</td>
           </tr>");
 
-            first = false;
-          }
-        }
+                        first = false;
+                    }
+                }
 
-        sb.Append(@"
+                sb.Append(@"
         </tbody>
       </table>
     </div>");
-      }
-    }
+            }
+        }
 
-    private void BuildExperimentalRunsTable(StringBuilder sb) {
-      if (_rawMetricsPerRun == null || !_rawMetricsPerRun.Any() || !_oaConfigurations.Any()) {
-        sb.Append("<div class='section'><h2>Experimental Run Details</h2><p>No detailed raw experimental run data available or OA configurations missing.</p></div>");
-        return;
-      }
+        private void BuildExperimentalRunsTable(StringBuilder sb) {
+            if (_rawMetricsPerRun == null || !_rawMetricsPerRun.Any() || !_oaConfigurations.Any()) {
+                sb.Append("<div class='section'><h2>Experimental Run Details</h2><p>No detailed raw experimental run data available or OA configurations missing.</p></div>");
+                return;
+            }
 
             var allMetricNames = _config.MetricsToAnalyze.Select(m => m.Name).ToList();
 
@@ -1090,11 +1109,11 @@ namespace TaguchiBench.Engine.Reporting {
             <th>OA Run #</th>
             <th>Configuration</th>");
 
-      foreach (string metricName in allMetricNames) {
-        sb.Append(@$"<th>Avg '{HttpUtility.HtmlEncode(metricName)}'</th><th>S/N '{HttpUtility.HtmlEncode(metricName)}'</th>");
-      }
+            foreach (string metricName in allMetricNames) {
+                sb.Append(@$"<th>Avg '{HttpUtility.HtmlEncode(metricName)}'</th><th>S/N '{HttpUtility.HtmlEncode(metricName)}'</th>");
+            }
 
-      sb.Append(@"
+            sb.Append(@"
             <th>Repetition Details</th>
           </tr>
         </thead>
@@ -1102,9 +1121,9 @@ namespace TaguchiBench.Engine.Reporting {
 
             for (int oaRunIndex = 0; oaRunIndex < _oaConfigurations.Count; oaRunIndex++) {
                 ParameterSettings currentConfig = _oaConfigurations[oaRunIndex];
-        string repContentId = $"repContent_{oaRunIndex}";
+                string repContentId = $"repContent_{oaRunIndex}";
 
-        sb.Append(@$"
+                sb.Append(@$"
           <tr>
             <td>{oaRunIndex + 1}</td>
             <td><pre style='margin:0; padding:5px; font-size:0.8em;'>{string.Join("<br>", currentConfig.Settings.OrderBy(s => s.Key).Select(s => $"{HttpUtility.HtmlEncode(s.Key)}: {HttpUtility.HtmlEncode(s.Value.Value)}"))}</pre></td>");
@@ -1119,25 +1138,25 @@ namespace TaguchiBench.Engine.Reporting {
                             .Where(val => !double.IsNaN(val))
                             .ToList();
 
-            if (metricValuesThisRun.Any()) {
-              avgMetricValue = metricValuesThisRun.Average();
-            }
-          }
+                        if (metricValuesThisRun.Any()) {
+                            avgMetricValue = metricValuesThisRun.Average();
+                        }
+                    }
 
-          var analysisForThisMetric = _analysisResultsList.FirstOrDefault(ar => ar.MetricAnalyzed == metricName);
+                    var analysisForThisMetric = _analysisResultsList.FirstOrDefault(ar => ar.MetricAnalyzed == metricName);
                     var runDetailForThisMetric = analysisForThisMetric?.ExperimentRunDetails?.FirstOrDefault(rd => rd.RunNumber == oaRunIndex + 1);
 
-          if (runDetailForThisMetric != null) {
-            snRatioForMetric = runDetailForThisMetric.SnRatioValue;
-          }
+                    if (runDetailForThisMetric != null) {
+                        snRatioForMetric = runDetailForThisMetric.SnRatioValue;
+                    }
 
-          sb.Append(@$"
+                    sb.Append(@$"
             <td>{(double.IsNaN(avgMetricValue) ? "N/A" : avgMetricValue.ToString("F4"))}</td>
             <td>{(double.IsNaN(snRatioForMetric) ? "N/A" : snRatioForMetric.ToString("F4"))}</td>");
-        }
+                }
 
-        // Collapsible Repetition Details button
-        sb.Append(@$"
+                // Collapsible Repetition Details button
+                sb.Append(@$"
             <td>
               <button type='button' class='collapsible-btn' data-target='{repContentId}'>Show Reps</button>
             </td>
@@ -1150,54 +1169,54 @@ namespace TaguchiBench.Engine.Reporting {
                     <tr>
                       <th>Rep #</th>");
 
-        foreach (string metricName in allMetricNames) {
-          sb.Append(@$"<th>{HttpUtility.HtmlEncode(metricName)}</th>");
-        }
+                foreach (string metricName in allMetricNames) {
+                    sb.Append(@$"<th>{HttpUtility.HtmlEncode(metricName)}</th>");
+                }
 
-        sb.Append(@"
+                sb.Append(@"
                     </tr>
                   </thead>
                   <tbody>");
 
-        if (_rawMetricsPerRun.TryGetValue(oaRunIndex, out var repsData)) {
-          for (int repIdx = 0; repIdx < repsData.Count; repIdx++) {
-            sb.Append(@$"
+                if (_rawMetricsPerRun.TryGetValue(oaRunIndex, out var repsData)) {
+                    for (int repIdx = 0; repIdx < repsData.Count; repIdx++) {
+                        sb.Append(@$"
                     <tr>
                       <td>{repIdx + 1}</td>");
 
-            foreach (string metricName in allMetricNames) {
-              repsData[repIdx].TryGetValue(metricName, out double val);
-              sb.Append(@$"
+                        foreach (string metricName in allMetricNames) {
+                            repsData[repIdx].TryGetValue(metricName, out double val);
+                            sb.Append(@$"
                       <td>{(double.IsNaN(val) ? "N/A" : val.ToString("F4"))}</td>");
-            }
+                        }
 
-            sb.Append(@"
+                        sb.Append(@"
                     </tr>");
-          }
-        } else {
-          sb.Append(@$"
+                    }
+                } else {
+                    sb.Append(@$"
                     <tr>
                       <td colspan='{1 + allMetricNames.Count}'>No repetition data recorded for this OA run.</td>
                     </tr>");
-        }
+                }
 
-        sb.Append(@"
+                sb.Append(@"
                   </tbody>
                 </table>
               </div>
             </td>
           </tr>");
-      }
+            }
 
-      sb.Append(@"
+            sb.Append(@"
         </tbody>
       </table>
     </div>
   </div>");
         }
 
-    private void BuildHtmlFooter(StringBuilder sb) {
-      sb.Append(@$"
+        private void BuildHtmlFooter(StringBuilder sb) {
+            sb.Append(@$"
   <div style='text-align: center; margin-top: 40px; color: #6c757d; font-size: 0.9em;'>
     <p>Generated by TaguchiBench Engine on {DateTime.Now:yyyy-MM-dd HH:mm:ss}</p>
   </div>
