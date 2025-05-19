@@ -1,0 +1,104 @@
+# TaguchiBench Engine - Simple Configuration for LiveBench Runner
+# -----------------------------------------------------------------
+# This configuration is designed for a quick start to optimize llama-server
+# parameters using LiveBench via the TaguchiBench.LiveBenchRunner.
+#
+# !! IMPORTANT !!
+# You MUST update the following paths to match YOUR system:
+# 1. In fixedCommandLineArguments:
+#    --livebench-scripts-path: Path to your LiveBench installation's inner 'livebench' directory.
+#    --llama-server-exe: Path to your compiled 'llama-server' executable.
+#    --llama-model: Path to the GGUF model file you want to test.
+# 2. Tuning for your available VRAM
+#    '--lb-max-tokens' and '--lb-parallel' sets llama-server's ctx-size to parallel * (2048 + max-tokens)
+#    If your llama-server supports it, --flash-attn and k/v cache quantization are highly recommended to reduce memory
+# -----------------------------------------------------------------
+
+# --- Engine Tuning & Behavior ---
+repetitions: 1                # For a quick test, 1 repetition. Increase for more robust results.
+outputDirectory: "./results"
+verbose: true                 # Engine's own logging verbosity.
+showTargetOutput: true        # Set to true to see detailed output from LiveBenchRunner & llama-server (can be very verbose).
+
+# --- Target Executable Definition ---
+targetExecutablePath: "dotnet"
+
+# --- Metrics to Analyze ---
+# These metrics are output by TaguchiBench.LiveBenchRunner.
+metricsToAnalyze:
+  - name: "AverageScore"        # Primary score from LiveBench.
+    method: "LargerIsBetter"
+
+  - name: "Time"                 # Execution time of the LiveBench generation script.
+    method: "SmallerIsBetter"
+
+  # You can add more metrics if LiveBenchRunner outputs them, e.g.:
+  # - name: "Raw_AverageScore_coding" # If you want to analyze a specific raw score
+  #   method: "LargerIsBetter"
+
+# --- Fixed Arguments & Environment Variables for Target (TaguchiBench.LiveBenchRunner) ---
+fixedCommandLineArguments:
+  # I didn't think enough about simple args. This works for now.
+  run: null
+  "--project": "src/TaguchiBench.LiveBenchRunner"
+
+  # --- Essential paths - MODIFY THESE ---
+  "--livebench-scripts-path": "/path/to/this/repo/livebench/livebench"
+  "--llama-server-exe": "/path/to/your/llama.cpp/server"
+  "--llama-model": "/path/to/your/model.gguf"
+  # --- End Essential paths ---
+
+  "--model-name": "optimized-model"   # Name LiveBench will use for this model in its outputs
+  "--lb-bench-name": "live_bench/coding"
+  "--lb-release": "2024-11-25"         # Look up the latest
+  "--lb-num-questions": 10         # For a quick test, run only 10 questions. Set to -1 for all.
+  "--lb-parallel": 4               # Parallel requests LiveBench makes to the server.
+  "--lb-max-tokens": 1024          # Max tokens LiveBench requests per completion.
+
+  # System prompt available via custom livebench fork installed by script
+  # /no_think recommended for Qwen3 family, for faster runs
+  # "--lb-system-prompt": "/no_think You are an advanced Software Development AI. It is your purpose to create elegant, modular, type safe, and composable solutions. Adhere strictly to your instructions."
+
+  # Llama-server specific fixed settings (passed through LiveBenchRunner)
+  "--llama-host": "127.0.0.1"
+  "--llama-port": 8088             # Choose a free port
+  # "--llama-logs": null             # Uncomment to enable llama-server's own logs (can be verbose)
+  # "--llama-log-verbosity": 0     # Set 0-3 if llama-logs is enabled
+  "--n-gpu-layers": 1000           # Example: Use all GPU layers. Adjust as needed.
+  # "--flash-attn": null           # Example: Enable flash attention if compiled in llama.cpp
+  # "--cache-type-k": q8_0
+  # "--cache-type-v": q8_0
+
+  # Example of setting an environment variable for the LiveBenchRunner process (which then sets it for llama-server)
+  # "--env-CUDA_VISIBLE_DEVICES": "0"
+
+# fixedEnvironmentVariables: # These are set directly for the LiveBenchRunner process by the Engine
+  # MY_GLOBAL_SETTING: "some_value" # Example
+
+# --- Control Factors (Parameters to Optimize for llama-server) ---
+# These are passed as CLI arguments to TaguchiBench.LiveBenchRunner,
+# which then passes them to llama-server when it starts it.
+# This configuration shows interesting (if not technically statistically significant) results even on short runs
+controlFactors:
+  - name: "Temperature"
+    cliArg: "--temp"
+    levels:
+      - "0.5"
+      - "1.0"
+
+  - name: "TopP"
+    cliArg: "--top-p"
+    levels:
+      - "0.80"
+      - "0.95"
+
+  - name: "PresencePenalty"
+    cliArg: "--presence-penalty"
+    levels:
+      - "0.5"
+      - "1.5"
+
+# --- Interactions to Analyze (Optional) ---
+interactions:
+  - firstFactorName: "Temperature"
+    secondFactorName: "PresencePenalty"

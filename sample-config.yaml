@@ -1,0 +1,132 @@
+# TaguchiBench Engine - Sample Configuration File
+# -----------------------------------------------
+# This file demonstrates the configuration options for the TaguchiBench Engine.
+# Copy this file, rename it (e.g., my_experiment.yaml), and modify it for your specific experiment.
+
+# --- Engine Tuning & Behavior ---
+repetitions: 2               # Number of times each experimental run (Orthogonal Array row) is repeated.
+                             # If noise factors are used, their levels are typically varied across these repetitions.
+outputDirectory: "./taguchi_experiment_results" # Directory for all reports, logs, and state files.
+verbose: true                # Enables detailed console and file logging from the TaguchiBench Engine itself.
+showTargetOutput: true       # If true, STDOUT/STDERR from the target executable will be logged by the engine.
+                             # Useful for debugging the target, can be noisy for well-behaved targets.
+poolingThresholdPercentage: 5.0 # ANOVA pooling threshold for insignificant effects (e.g., 5.0 for 5%).
+
+# --- Target Executable Definition ---
+# Specifies the program or script that the Taguchi Engine will run for each experiment.
+targetExecutablePath: "/usr/bin/python3" # Example: Python script. Could be "./my_program.exe" or "bash ./run_eval.sh"
+                                          # Ensure this path is correct and the target is executable.
+
+# --- Metrics to Analyze ---
+# Define the metrics that your target executable will output in its JSON result.
+# The 'name' must exactly match a key in the JSON: {"result":{"MetricName1": X, "MetricName2": Y, ...}}
+# Each metric listed here will undergo a full Taguchi analysis.
+metricsToAnalyze:
+  - name: "Accuracy"             # Example: A classification accuracy score.
+    method: "LargerIsBetter"   # Optimization goal: Maximize this metric.
+                               # Options: LargerIsBetter, SmallerIsBetter, Nominal.
+
+  - name: "ExecutionTime"         # Example: Time taken by the target.
+    method: "SmallerIsBetter"  # Optimization goal: Minimize this metric.
+
+  - name: "ResourceUsagePct"      # Example: A resource utilization percentage.
+    method: "Nominal"          # Optimization goal: Aim for a specific target value.
+    target: 45.0               # Required if method is "Nominal". Defines the desired target.
+
+  - name: "PassRate@1"            # Another example metric.
+    method: "LargerIsBetter"
+
+# --- Fixed Arguments & Environment Variables for Target ---
+# These are passed to the target executable for EVERY run and are NOT part of the Taguchi optimization.
+# They define the static context for your experiment.
+
+# Command-line arguments always passed to 'targetExecutablePath'.
+# Keys are the FULL argument strings the target expects (e.g., "--dataset", "-c").
+# Value 'null' indicates a flag argument (e.g., "--enable-feature": null becomes just "--enable-feature").
+fixedCommandLineArguments:
+  # For the example targetExecutablePath = "/usr/bin/python3", these might be args for a script:
+  "/path/to/my_evaluation_script.py": null # The script itself is the first argument
+  "--dataset-path": "/data/my_dataset.csv"
+  "--mode": "evaluation"
+  "--log-level": "info"
+  "--use-gpu": null # This would be passed as just "--use-gpu"
+
+# Environment variables always set for the 'targetExecutablePath' process.
+fixedEnvironmentVariables:
+  EXPERIMENT_ID: "TaguchiOpt_XYZ123"
+  PYTHONUNBUFFERED: "1" # Useful for seeing Python script output immediately.
+  # CUDA_VISIBLE_DEVICES: "0" # Example for GPU selection
+
+# --- Control Factors (Parameters to Optimize) ---
+# These are the parameters whose optimal levels the Taguchi Engine will try to find.
+# Each factor needs a 'name' (unique identifier used in reports and interactions).
+# It must define how it's passed to the target:
+#   'cliArg': The command-line argument string (e.g., "--learning-rate").
+#   'envVar': The environment variable name (e.g., "LEARNING_RATE").
+#   One or both can be specified.
+# It must define its levels for testing:
+#   'levels': A list of exact string values to test.
+#   'floatRange': [min, max] - Engine picks 2 or 3 equidistant levels. (Future: numLevels config)
+#   'intRange': [min, max] - Engine picks 2 or 3 equidistant integer levels. (Future: numLevels config)
+
+controlFactors:
+  - name: "LearningRate"
+    cliArg: "--learning-rate" # Target receives: --learning-rate <value>
+    levels:
+      - "0.001"
+      - "0.005"
+      - "0.01"         # A 3-level factor
+
+  - name: "BatchSize"
+    envVar: "BATCH_SIZE"    # Target receives BATCH_SIZE=<value> in its environment
+    levels:
+      - "32"
+      - "64"             # A 2-level factor
+
+  - name: "OptimizerAlgorithm"
+    cliArg: "--optimizer"
+    levels:
+      - "Adam"
+      - "SGD"
+      # - "RMSprop" # Can add more levels if the chosen Orthogonal Array supports it
+
+  - name: "DropoutRate"
+    cliArg: "--dropout"
+    floatRange: [0.1, 0.5] # Engine will select e.g., 0.1, 0.3, 0.5 if it needs 3 levels for this factor
+                           # Or 0.1, 0.5 if it needs 2 levels. Depends on OA selection.
+
+  - name: "Epochs"
+    envVar: "NUM_EPOCHS"
+    intRange: [10, 50]     # Engine will select e.g., 10, 30, 50 (or 10, 50)
+
+# --- Noise Factors (Optional - for Robustness Analysis) ---
+# These factors are varied systematically across the 'repetitions' of each control factor combination.
+# The goal is to find control factor settings that perform well consistently despite variations in noise.
+# The optimal *level* of a noise factor is not typically determined; rather, their effect on robustness is observed.
+# Structure is similar to controlFactors.
+noiseFactors:
+  - name: "DataSubsetSeed"
+    cliArg: "--data-seed"
+    # For noise factors, 'levels' implies these specific values will be cycled through
+    # across the 'repetitions'. If repetitions > number of levels, they cycle.
+    levels:
+      - "111"
+      - "222"
+      # - "333" # If repetitions = 2, only 111 and 222 will be used in cycle.
+
+  - name: "SimulatedNetworkJitter"
+    envVar: "NETWORK_JITTER_MS"
+    intRange: [0, 100] # If repetitions = 2, engine might pick e.g., 0 and 100.
+                       # If repetitions = 3, engine might pick e.g., 0, 50, 100.
+                       # (Actual sampling strategy for ranges in noise factors can vary by implementation detail)
+
+# --- Interactions to Analyze (Optional) ---
+# Define pairs of CONTROL FACTOR names (from 'controlFactors' section above)
+# to include in the ANOVA and interaction plots.
+# The engine will attempt to assign these to appropriate columns in the Orthogonal Array if possible.
+interactions:
+  - firstFactorName: "LearningRate"
+    secondFactorName: "OptimizerAlgorithm"
+
+  # - firstFactorName: "BatchSize"
+  #   secondFactorName: "DropoutRate"
