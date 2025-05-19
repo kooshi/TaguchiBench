@@ -7,6 +7,8 @@ TaguchiBench is a suite of tools designed for robust parameter optimization usin
 
 This suite allows for systematic and efficient optimization of parameters, considering multiple performance metrics and interactions between parameters.
 
+View an example markdown report [here](example_report.md)
+
 ## Core Philosophy
 
 The TaguchiBench Engine is built on the principle of **agnosticism and genericity**. It does not make assumptions about the target program being optimized, other than requiring it to accept parameters via command-line arguments/environment variables and to output results in a specific JSON format. This allows it to be a versatile tool for a wide range of optimization tasks.
