@@ -115,7 +115,7 @@ A specialized utility that:
 This project is licensed under the MIT License - see the `LICENSE` file for details.
 
 ## Acknowledgments
-
+-   [NightHawkInLight (YouTube)](https://youtu.be/5oULEuOoRd0) for the inspiration.
 -   [llama.cpp](https://github.com/ggml-org/llama.cpp) for the LLM inference engine.
 -   [LiveBench](https://github.com/livebench/livebench) for the coding benchmark framework.
 -   [YamlDotNet](https://github.com/aaubry/YamlDotNet) for YAML serialization in C#.
