@@ -6,6 +6,7 @@ using System.Globalization;
 using System.IO;
 using System.Linq;
 using System.Text;
+using System.Threading.Tasks;
 using TaguchiBench.Common; // For Logger
 using TaguchiBench.Engine.Configuration;
 using TaguchiBench.Engine.Core;
@@ -145,7 +146,7 @@ namespace TaguchiBench.Engine.Reporting {
         }
 
         private void AppendSingleMetricAnalysis(StringBuilder sb, FullAnalysisReportData metricData, string metricTitle) {
-            sb.AppendLine($"\n## {metricTitle}");
+            sb.AppendLine($"\n# {metricTitle}");
             sb.AppendLine($"*   **S/N Ratio Type Used:** `{metricData.SnTypeUsed}`");
 
             AppendAnalysisWarningsMd(sb, metricData.InitialAnova?.AnalysisWarnings, $"{metricData.MetricAnalyzed} - Initial ANOVA");
@@ -168,6 +169,7 @@ namespace TaguchiBench.Engine.Reporting {
             if (metricData.PooledAnova != null) {
                 AppendAnovaResultsMd(sb, metricData.PooledAnova, $"Pooled ANOVA Results ('{metricData.MetricAnalyzed}')");
             }
+
             // Main effects, interactions, effect estimates can be lengthy for Markdown.
             // Users are typically directed to HTML for detailed plots and tables.
             // We can include a summary or skip for brevity in Markdown.
@@ -179,10 +181,10 @@ namespace TaguchiBench.Engine.Reporting {
 
         private void AppendAnovaResultsMd(StringBuilder sb, AnovaAnalysisResult anovaResult, string title) {
             if (anovaResult == null || anovaResult.AnovaTable == null || !anovaResult.AnovaTable.Any()) {
-                sb.AppendLine($"\n### {title}\n*   No ANOVA data available.");
+                sb.AppendLine($"\n## {title}\n*   No ANOVA data available.");
                 return;
             }
-            sb.AppendLine($"\n### {title}");
+            sb.AppendLine($"\n## {title}");
             if (anovaResult.IsPooled && anovaResult.PooledSources.Any()) {
                 sb.AppendLine($"*   *Factors Pooled into Error: {string.Join(", ", anovaResult.PooledSources.Select(s => $"`{s}`"))}*");
             }
@@ -192,11 +194,45 @@ namespace TaguchiBench.Engine.Reporting {
                 .ToList().ForEach(r => sb.AppendLine(
                     $"| {r.Source,-26} | {r.ContributionPercentage,11:F2} | {r.SumOfSquares,7:F4} | {r.DegreesOfFreedom,2} | {(double.IsNaN(r.MeanSquare) ? "N/A" : r.MeanSquare.ToString("F4")),7} | {(double.IsNaN(r.FValue) ? "N/A" : r.FValue.ToString("F2")),7} | {(double.IsNaN(r.PValue) ? "N/A" : r.PValue.ToString("F4")),7} | {(r.Source.Contains(AnovaResult.ErrorSource) ? "N/A" : (r.IsSignificant ? "**Yes**" : "No")),-20} |"));
             sb.AppendLine($"| **Total**                  |             | {anovaResult.TotalSumOfSquares,7:F4} | {anovaResult.TotalDegreesOfFreedom,2} |         |         |         |                      |");
+
+            // Add mermaid pie chart for contributions
+            AppendContributionPieChartMermaid(sb, anovaResult, title);
+        }
+
+        private void AppendContributionPieChartMermaid(StringBuilder sb, AnovaAnalysisResult anovaResult, string title) {
+            if (anovaResult == null || anovaResult.AnovaTable == null || !anovaResult.AnovaTable.Any()) {
+                return;
+            }
+
+            var chartData = anovaResult.AnovaTable
+                .Where(r => r.ContributionPercentage > 0.01 && !r.Source.Contains(AnovaResult.ErrorSource))
+                .OrderByDescending(r => r.ContributionPercentage)
+                .ToList();
+
+            if (!chartData.Any()) {
+                return;
+            }
+
+            sb.AppendLine("\n#### Contribution Percentage Visualization");
+            sb.AppendLine("\n```mermaid");
+            sb.AppendLine("pie");
+            sb.AppendLine($"    title Contribution Percentages");
+
+            foreach (var item in chartData) {
+                string displayValue = item.ContributionPercentage.ToString("F1", CultureInfo.InvariantCulture);
+                string label = item.Source.Replace("*", "×").Replace(":", "");
+                sb.AppendLine($"    \"{label}\" : {displayValue}");
+            }
+
+            sb.AppendLine("```");
         }
 
         private void AppendMainEffectsMd(StringBuilder sb, Dictionary<string, ParameterMainEffect> mainEffects, string metricName) {
-            if (mainEffects == null || !mainEffects.Any()) { return; }
-            sb.AppendLine($"\n### Main Effects (for '{metricName}')");
+            if (mainEffects == null || !mainEffects.Any()) {
+                return;
+            }
+
+            sb.AppendLine($"\n## Main Effects (for '{metricName}')");
             sb.AppendLine("| Parameter                  | Level Value | Avg S/N Ratio | Avg Raw Metric |");
             sb.AppendLine("|----------------------------|-------------|---------------|----------------|");
             foreach (var paramEffectPair in mainEffects.OrderBy(p => p.Key)) {
@@ -207,23 +243,110 @@ namespace TaguchiBench.Engine.Reporting {
                     firstLevel = false;
                 }
             }
+            foreach (var paramEffectPair in mainEffects.OrderBy(p => p.Key)) {
+                // Add XY Chart for each parameter
+                AppendMainEffectXyChart(sb, paramEffectPair.Key, paramEffectPair.Value);
+            }
+        }
+
+        private void AppendMainEffectXyChart(StringBuilder sb, string paramName, ParameterMainEffect effectData) {
+            var orderedLevelsRaw = effectData.EffectsByLevelRaw.OrderBy(kvp => kvp.Key.OALevel.Level).ToList();
+
+            if (!orderedLevelsRaw.Any()) {
+                return;
+            }
+
+            sb.AppendLine($"\n### Main Effect Chart: {paramName}");
+            sb.AppendLine("\n```mermaid");
+            sb.AppendLine("xychart-beta");
+            sb.AppendLine($"    title \"Main Effect: {paramName}\"");
+            sb.AppendLine("    x-axis [" + string.Join(", ", orderedLevelsRaw.Select(kvp => $"\"{kvp.Key.Value}\"")) + "]");
+            sb.AppendLine("    y-axis \"Raw Metric Value\"");
+
+            // Raw Metric series only
+            sb.AppendLine("    line [" +
+                string.Join(", ", orderedLevelsRaw.Select(kvp => kvp.Value.ToString("F4", CultureInfo.InvariantCulture))) +
+                "]");
+
+            sb.AppendLine("```\n");
         }
 
         private void AppendInteractionEffectsMd(StringBuilder sb, Dictionary<string, ParameterInteractionEffect> interactionEffects, string metricName) {
-            if (interactionEffects == null || !interactionEffects.Any()) { return; }
-            sb.AppendLine($"\n### Interaction Effects (S/N Ratios - for '{metricName}')");
+            if (interactionEffects == null || !interactionEffects.Any()) {
+                return;
+            }
+
+            sb.AppendLine($"\n## Interaction Effects (S/N Ratios - for '{metricName}')");
             foreach (var interactionPair in interactionEffects.OrderBy(i => i.Key)) {
-                sb.AppendLine($"\n#### Interaction: `{interactionPair.Key}`");
+                sb.AppendLine($"\n### Interaction: `{interactionPair.Key}`");
                 sb.AppendLine("| Level (Factor 1) | Level (Factor 2) | Avg S/N Ratio |");
                 sb.AppendLine("|------------------|------------------|---------------|");
                 foreach (var levelPairEffect in interactionPair.Value.EffectsByLevelPair.OrderBy(kvp => kvp.Key.Level1.OALevel.Level).ThenBy(kvp => kvp.Key.Level2.OALevel.Level)) {
                     sb.AppendLine($"| `{levelPairEffect.Key.Level1.Value,-16}` | `{levelPairEffect.Key.Level2.Value,-16}` | {levelPairEffect.Value,13:F4} |");
                 }
             }
+
+
+
+            foreach (var interactionPair in interactionEffects.OrderBy(i => i.Key)) {
+                // Add XY Chart for each interaction
+                string[] factorNames = interactionPair.Key.Split('*');
+                if (factorNames.Length == 2) {
+                    AppendInteractionXyChart(sb, interactionPair.Key, interactionPair.Value, factorNames[0], factorNames[1]);
+                }
+            }
+        }
+
+        private void AppendInteractionXyChart(StringBuilder sb, string interactionKey, ParameterInteractionEffect effectData,
+            string factor1Name, string factor2Name) {
+            // Get unique Factor 1 and Factor 2 levels
+            var factor1Levels = effectData.EffectsByLevelPair.Select(kvp => kvp.Key.Level1)
+                .Distinct()
+                .OrderBy(l => l.OALevel.Level)
+                .ToList();
+
+            var factor2Levels = effectData.EffectsByLevelPair.Select(kvp => kvp.Key.Level2)
+                .Distinct()
+                .OrderBy(l => l.OALevel.Level)
+                .ToList();
+
+            if (!factor1Levels.Any() || !factor2Levels.Any()) {
+                return;
+            }
+
+            sb.AppendLine($"\n### Interaction Chart: {factor1Name} × {factor2Name} (S/N Ratio)");
+            sb.AppendLine("\n```mermaid");
+            sb.AppendLine("xychart-beta");
+            sb.AppendLine($"    title \"Interaction: {factor1Name} × {factor2Name}\"");
+
+            // X-Axis is Factor 1 levels
+            sb.AppendLine("    x-axis [" + string.Join(", ", factor1Levels.Select(l => $"\"{l.Value}\"")) + "]");
+            sb.AppendLine("    y-axis \"S/N Ratio\"");
+
+            // Each line represents a level of Factor 2
+            foreach (var level2 in factor2Levels) {
+                var dataValues = new List<string>();
+
+                foreach (var level1 in factor1Levels) {
+                    // Look up the interaction effect for this level combination
+                    if (effectData.EffectsByLevelPair.TryGetValue((level1, level2), out double snVal) && !double.IsNaN(snVal)) {
+                        dataValues.Add(snVal.ToString("F4", CultureInfo.InvariantCulture));
+                    } else {
+                        dataValues.Add("null");
+                    }
+                }
+
+                sb.AppendLine($"    line [{string.Join(", ", dataValues)}]");
+            }
+
+            sb.AppendLine("```\n");
         }
 
         private void AppendEffectEstimatesMd(StringBuilder sb, List<EffectEstimate> effectEstimates, string metricName) {
-            if (effectEstimates == null || !effectEstimates.Any()) { return; }
+            if (effectEstimates == null || !effectEstimates.Any()) {
+                return;
+            }
+
             sb.AppendLine($"\n### Effect Estimates (S/N Scale - for '{metricName}')");
             sb.AppendLine("| Source                     | Effect Est. | Abs(Effect) |");
             sb.AppendLine("|----------------------------|-------------|-------------|");
@@ -234,13 +357,13 @@ namespace TaguchiBench.Engine.Reporting {
 
         private void AppendExperimentalRunsTable(StringBuilder sb) {
             if (_rawMetricsPerRun == null || !_rawMetricsPerRun.Any() || !_oaConfigurations.Any()) {
-                sb.AppendLine("\n## Experimental Run Details\n*   No detailed experimental run data available.");
+                sb.AppendLine("\n# Experimental Run Details\n*   No detailed experimental run data available.");
                 return;
             }
 
             var allMetricNames = _config.MetricsToAnalyze.Select(m => m.Name).ToList();
 
-            sb.AppendLine("\n## Experimental Run Details");
+            sb.AppendLine("\n# Experimental Run Details");
             sb.AppendLine($"*Averages over {_config.Repetitions} repetition(s) per OA run.*");
 
             // Header
@@ -272,12 +395,16 @@ namespace TaguchiBench.Engine.Reporting {
                         var metricValuesThisRun = repetitionsForThisOARun
                             .Select(repData => repData.TryGetValue(metricName, out double val) ? val : double.NaN)
                             .Where(val => !double.IsNaN(val)).ToList();
-                        if (metricValuesThisRun.Any()) { avgMetricValue = metricValuesThisRun.Average(); }
+                        if (metricValuesThisRun.Any()) {
+                            avgMetricValue = metricValuesThisRun.Average();
+                        }
                     }
 
                     var analysisForThisMetric = _analysisResultsList.FirstOrDefault(ar => ar.MetricAnalyzed == metricName);
                     var runDetailForThisMetric = analysisForThisMetric?.ExperimentRunDetails?.FirstOrDefault(rd => rd.RunNumber == oaRunIndex + 1);
-                    if (runDetailForThisMetric != null) { snRatioForMetric = runDetailForThisMetric.SnRatioValue; }
+                    if (runDetailForThisMetric != null) {
+                        snRatioForMetric = runDetailForThisMetric.SnRatioValue;
+                    }
 
                     sb.Append($"| {(double.IsNaN(avgMetricValue) ? "N/A" : avgMetricValue.ToString("F4")),-17} | {(double.IsNaN(snRatioForMetric) ? "N/A" : snRatioForMetric.ToString("F4")),-17} ");
                 }

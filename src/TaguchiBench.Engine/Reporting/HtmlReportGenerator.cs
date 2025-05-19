@@ -554,72 +554,102 @@ namespace TaguchiBench.Engine.Reporting {
         </tfoot>
       </table>
     </div>");
-        }
+    }
+    private void BuildAnovaContributionChart(StringBuilder sb, AnovaAnalysisResult anovaResult, string title, string canvasIdSuffix)
+    {
+      if (anovaResult == null || anovaResult.AnovaTable == null || !anovaResult.AnovaTable.Any())
+      {
+        return;
+      }
 
-        private void BuildAnovaContributionChart(StringBuilder sb, AnovaAnalysisResult anovaResult, string title, string canvasIdSuffix) {
-            if (anovaResult == null || anovaResult.AnovaTable == null || !anovaResult.AnovaTable.Any()) {
-                return;
-            }
+      var chartData = anovaResult.AnovaTable
+          .Where(r => r.ContributionPercentage > 0.01 && !r.Source.Contains(AnovaResult.ErrorSource))
+          .OrderByDescending(r => r.ContributionPercentage)
+          .ToList();
 
-            var chartData = anovaResult.AnovaTable
-                .Where(r => r.ContributionPercentage > 0.01 && !r.Source.Contains(AnovaResult.ErrorSource))
-                .OrderByDescending(r => r.ContributionPercentage)
-                .ToList();
+      if (!chartData.Any())
+      {
+        return;
+      }
 
-            if (!chartData.Any()) {
-                return;
-            }
+      var labels = chartData.Select(r => $"'{HttpUtility.JavaScriptStringEncode(r.Source)}'").ToList();
+      var dataValues = chartData.Select(r => r.ContributionPercentage.ToString("F2", CultureInfo.InvariantCulture)).ToList();
+      string canvasId = $"anovaContribChart_{canvasIdSuffix}";
 
-            var labels = chartData.Select(r => $"'{HttpUtility.JavaScriptStringEncode(r.Source)}'").ToList();
-            var dataValues = chartData.Select(r => r.ContributionPercentage.ToString("F2", CultureInfo.InvariantCulture)).ToList();
-            string canvasId = $"anovaContribChart_{canvasIdSuffix}";
+      // Generate a palette of colors for the pie chart
+      var backgroundColors = new List<string>();
+      var borderColors = new List<string>();
 
-            sb.Append(@$"
+      // Base colors for the pie segments
+      string[] colorPalette = new[] {
+          "rgba(44, 111, 187, 0.7)",   // Primary blue
+          "rgba(220, 53, 69, 0.7)",    // Red
+          "rgba(40, 167, 69, 0.7)",    // Green
+          "rgba(255, 193, 7, 0.7)",    // Yellow
+          "rgba(111, 66, 193, 0.7)",   // Purple
+          "rgba(23, 162, 184, 0.7)",   // Cyan
+          "rgba(108, 117, 125, 0.7)",  // Gray
+          "rgba(253, 126, 20, 0.7)"    // Orange
+      };
+
+      for (int i = 0; i < chartData.Count; i++)
+      {
+        string baseColor = colorPalette[i % colorPalette.Length];
+        backgroundColors.Add($"'{baseColor}'");
+        
+        // Create proper border color by extracting RGB components and setting alpha to 1
+        string borderColor = baseColor.Replace("rgba(", "").Replace(", 0.7)", "");
+        borderColors.Add($"'rgba({borderColor}, 1)'");
+      }
+
+      sb.Append(@$"
       <div class='plot-container'>
         <h4>{HttpUtility.HtmlEncode(title)}</h4>
-        <div class='chart-wrapper' style='height: {Math.Max(150, chartData.Count * 30 + 50)}px;'>
+        <div class='chart-wrapper'>
           <canvas id='{canvasId}'></canvas>
         </div>
         <script>
         (function() {{
           const ctx = document.getElementById('{canvasId}').getContext('2d');
           new Chart(ctx, {{
-            type: 'bar',
+            type: 'pie',
             data: {{ 
               labels: [{string.Join(",", labels)}], 
               datasets: [{{ 
                 label: 'Contribution (%)', 
                 data: [{string.Join(",", dataValues)}], 
-                backgroundColor: 'rgba(44, 111, 187, 0.7)', 
-                borderColor: 'rgba(44, 111, 187, 1)', 
-                borderWidth: 1 
+                backgroundColor: [{string.Join(",", backgroundColors)}], 
+                borderColor: [{string.Join(",", borderColors)}], 
+                borderWidth: 1,
+                hoverOffset: 15
               }}] 
             }},
             options: {{ 
-              indexAxis: 'y', 
               responsive: true, 
               maintainAspectRatio: false, 
               plugins: {{ 
-                legend: {{ display: false }}, 
+                legend: {{ 
+                  display: true,
+                  position: 'right',
+                  labels: {{
+                    boxWidth: 15,
+                    padding: 10,
+                    font: {{ size: 11 }}
+                  }}
+                }}, 
                 tooltip: {{ 
                   backgroundColor: 'rgba(0,0,0,0.7)', 
                   titleFont: {{size:14}}, 
                   bodyFont: {{size:13}}, 
                   padding: 10, 
-                  cornerRadius: 4 
+                  cornerRadius: 4,
+                  callbacks: {{
+                    label: function(context) {{
+                      return context.label + ': ' + context.raw + '%';
+                    }}
+                  }}
                 }} 
-              }}, 
-              scales: {{ 
-                x: {{ 
-                  title: {{ 
-                    display: true, 
-                    text: 'Contribution (%)' 
-                  }} 
-                }}, 
-                y: {{ 
-                  ticks: {{ autoSkip: false }} 
-                }} 
-              }} 
+              }}
             }}
           }});
         }})();
